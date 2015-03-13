@@ -1,5 +1,5 @@
 # ndarray_plot
-Script for plotting / visualizing three dimensional arrays.
+Script for plotting / visualizing three dimensional arrays, see below for a couple of examples.
 
 # Default visualization
 
