@@ -47,11 +47,11 @@ def skew(l, m, n, recipe=None):
     elif recipe == "even_wide":
         return (l*2.0, m*0.1, n*0.1)
     elif recipe == "layered_tight":
-        return (l*0.1, -l*0.5, l*0.5)
+        return (l*0.5, l*0.5, l*0.5)
     elif recipe == "layered_loose":
-        return (l*1.0, -l*1.0, l*1.0)
+        return (l*0.2, l*1.0, l*1.0)
     elif recipe == "layered":
-        return (l*0.75, -l*0.75, l*0.75)
+        return (l*0.75, l*0.75, l*0.75)
     else:
         raise TypeError("Unknown recipe[%s]" % recipe)
 
@@ -100,7 +100,7 @@ class NDArrayPlotter(object):
 
     def render(self, ary, text=None, highlight=None, azim=-15, elev=15):
         
-        fig = plt.figure()
+        fig = plt.figure(dpi=120)
         ax = fig.add_subplot(111, projection='3d')
 
         cube = make_cube()
@@ -162,9 +162,43 @@ class NDArrayPlotter(object):
         ax.set_ylim((0,highest))
         ax.set_zlim((0,highest))
         
-        ax.set_title("ND array(l, m, n) = %dD %s" % (ary.ndim, str(ary.shape)))
 
-        ax.set_xlabel('l' )   # Meant to visualize ROW-MAJOR ordering 
+        ax.set_title(r"ND array(\textbf{\emph{l}}, \textbf{\emph{m}}, \textbf{\emph{n}}) = %dD %s" % (ary.ndim, str(ary.shape)))
+
+        plt.gca().invert_zaxis()
+
+        #
+        #   This is a crazy way to print axis-labels...
+        #
+        # x = l
+        # y = n
+        # z = m
+        L, M, N = ary.shape
+        L_scl,  M_scl,  N_scl  = np.asarray(self.scale)
+        L_skew, M_skew, N_skew = skew(L_scl, M_scl, N_scl)
+
+        axis_label_format = r"$\leftarrow$ \textbf{\emph{%s}} $\rightarrow$"
+
+        laxis_label = axis_label_format % "l" 
+        maxis_label = axis_label_format % "m" 
+        naxis_label = axis_label_format % "n" 
+
+        ax.text(
+            (L_scl*(L+L_skew))/2.0, -0.5, (M_scl*(M+M_skew))+0.5,
+            laxis_label, zdir='x', horizontalalignment='center', verticalalignment='center'
+        )
+        ax.text(
+            0, -0.5, (M_scl*(M+M_skew))/2.0, 
+            maxis_label, zdir='z', horizontalalignment='center', verticalalignment='center'
+        )
+        ax.text(
+            0, (N_scl*(N+N_skew))/2.0, -0.5, 
+            naxis_label, zdir='y', 
+        )
+        plt.axis('off')
+
+        """
+        ax.set_xlabel('l') 
         ax.set_ylabel('n')
         ax.set_zlabel('m')
 
@@ -182,8 +216,10 @@ class NDArrayPlotter(object):
         ax.w_xaxis.line.set_color((1.0, 1.0, 1.0, 0.0))
         ax.w_yaxis.line.set_color((1.0, 1.0, 1.0, 0.0))
         ax.w_zaxis.line.set_color((1.0, 1.0, 1.0, 0.0))
-
-        plt.gca().invert_zaxis()
+        """
+        #
+        # End of crazy crazy way to print axis-labels
+        #
 
         ax.view_init(azim=azim, elev=elev)
 
@@ -224,14 +260,14 @@ def main():
     #subject = np.ones((1,3,3))
     subject = np.arange(0,9).reshape((1,3,3))
     plotter = NDArrayPlotter(subject.shape, skewer="even_wide")
+    
     colors = plotter.set_color("#FFFF00")
     alphas = plotter.set_alpha(0.2)
 
     colors[:,1,:] = "#FF0000"
     colors[:,0,:] = "#00FF00"
     colors[:,2,:] = "#0000FF"
-    print subject
-    #(fig, ax) = plotter.render(subject, text='coords')
+
     (fig_coord, ax_coors) = plotter.render(subject, text='coords')
     (fig_values, ax_value) = plotter.render(subject, text='values')
     plt.show()
