@@ -12,10 +12,10 @@ rcParams['font.serif'] = ['Computer Modern Roman']
 rcParams['text.usetex'] = True
 rcParams['grid.alpha'] = 0.0
 
-def make_cube():
-    """ A Cube consists of a bunch of planes..."""
+def make_element():
+    """ A element consists of a bunch of planes/surfaces..."""
 
-    planes = {
+    element = {
         "top"    : np.asarray( [[[0,1],[0,1]], [[0,0],[1,1]], [[1,1],[1,1]]] ),
         "bottom" : np.asarray( [[[0,1],[0,1]], [[0,0],[1,1]], [[0,0],[0,0]]] ),
         "left"   : np.asarray( [[[0,0],[0,0]], [[0,1],[0,1]], [[0,0],[1,1]]] ),
@@ -24,66 +24,68 @@ def make_cube():
         "back"   : np.asarray( [[[0,1],[0,1]], [[1,1],[1,1]], [[0,0],[1,1]]] )
     }
 
-    """
-    planes = {
-        "top"    : np.asarray( [[[1,2],[1,2]], [[1,1],[2,2]], [[2,2],[2,2]]] ),
-        "bottom" : np.asarray( [[[1,2],[1,2]], [[1,1],[2,2]], [[1,1],[1,1]]] ),
-        "left"   : np.asarray( [[[1,1],[1,1]], [[1,2],[1,2]], [[1,1],[2,2]]] ),
-        "right"  : np.asarray( [[[2,2],[2,2]], [[1,2],[1,2]], [[1,1],[2,2]]] ),
-        "front"  : np.asarray( [[[1,2],[1,2]], [[1,1],[1,1]], [[1,1],[2,2]]] ),
-        "back"   : np.asarray( [[[1,2],[1,2]], [[2,2],[2,2]], [[1,1],[2,2]]] )
-    }
-    """
+    return element
 
-    return planes
-
-def skew(l, m, n, recipe=None):
+def apply_spacing(l, m, n, spacing=(None, 0,0,0)):
     """Position of array elements in relation to each other."""
+
+    recipe, l_f, m_f, n_f = spacing
+    if recipe not in [None, 'even', 'l', 'm', 'n']:
+        raise TypeError("BAD")
 
     if recipe is None:
         return (0,0,0)
-    elif recipe == "even":
-        return (l*0.1, m*0.1, n*0.1)
-    elif recipe == "even_wide":
-        return (l*2.0, m*0.1, n*0.1)
-    elif recipe == "layered_tight":
-        return (l*0.5, l*0.5, l*0.5)
-    elif recipe == "layered_loose":
-        return (l*0.2, l*1.0, l*1.0)
-    elif recipe == "layered":
-        return (l*0.75, l*0.75, l*0.75)
+    elif recipe == 'even':
+        return (l*l_f, m*m_f, n*n_f)
+    elif recipe == 'l':
+        return (l*l_f, l*m_f, l*n_f)
+    elif recipe == 'm':
+        return (m*l_f, m*m_f, m*n_f)
+    elif recipe == 'n':
+        return (n*l_f, n*m_f, n*n_f)
     else:
         raise TypeError("Unknown recipe[%s]" % recipe)
 
+def text_coords(array, l, m, n):
+    return "[%d,%d,%d]" % (l, m, n)
+
+def text_values(array, l, m, n):
+    return str(array[l,m, n])
+
 class NDArrayPlotter(object):
 
-    def __init__(self, shape, color="blue", alpha="0.6", scale=(1, 1, 1), skewer=None):
-        self.defaults = {
-            "color": color,
-            "alpha": alpha,
-            "shape": shape,
-            "scale": scale,
-            "skewer":  skewer
+    def __init__(
+        self, 
+        array,
+        color="blue",
+        alpha="0.6",
+        scale=(1, 1, 1),
+        spacing=(None, 0,0,0)
+    ):
+        self.defaults_ = {
+            "color":    color,
+            "alpha":    alpha,
+            "scale":    scale,
+            "spacing":  spacing
         }
-        self.set_shape(shape)
-        self.set_color(color)
-        self.set_alpha(alpha)
-        self.set_skewer(skewer)
-        self.set_scale(scale)
+        self.reset(array)
 
-    def set_shape(self, shape):
-        self.shape = shape
+    def reset(self, array):
+        self.array_ = array
 
-        return self.shape
+        self.set_color(self.defaults_["color"])
+        self.set_alpha(self.defaults_["alpha"])
+        self.set_spacing(self.defaults_["spacing"])
+        self.set_scale(self.defaults_["scale"])
 
     def set_color(self, color):
-        self.colors = np.zeros(self.shape, dtype=('a10'))
+        self.colors = np.zeros(self.array_.shape, dtype=('a10'))
         self.colors[:] = color
 
         return self.colors
 
     def set_alpha(self, alpha):
-        self.alphas = np.empty(self.shape, dtype=np.float32)
+        self.alphas = np.empty(self.array_.shape, dtype=np.float32)
         self.alphas[:] = alpha
 
         return self.alphas
@@ -93,36 +95,39 @@ class NDArrayPlotter(object):
 
         return self.scale
 
-    def set_skewer(self, skewer):
-        self.skewer = skewer
+    def set_spacing(self, spacing):
+        self.spacing = spacing
 
-        return self.skewer
+        return self.spacing
 
-    def render(self, ary, text=None, highlight=None, azim=-15, elev=15):
+    def render(self, array=None, text=None, azim=-15, elev=15):
+
+        if not array:
+            array = self.array_
+
+        if array.shape != self.array_.shape:
+            reset(array)
         
         fig = plt.figure(dpi=120)
         ax = fig.add_subplot(111, projection='3d')
 
-        cube = make_cube()
+        element = make_element()
 
-        for l in xrange(0, ary.shape[0]):
-            for m in xrange(0, ary.shape[1]):
-                for n in xrange(0, ary.shape[2]):
+        for l in xrange(0, array.shape[0]):
+            for m in xrange(0, array.shape[1]):
+                for n in xrange(0, array.shape[2]):
 
-                    # Extract settings that apply to all sides of the cube
+                    # Extract settings that apply to all sides of the element
                     alpha = self.alphas[l, m, n]
                     color = self.colors[l, m, n]
 
-                    if highlight and highlight[l, m, n] == 1:
-                        alpha = 1
+                    relative_pos = apply_spacing(l, m, n, self.spacing)
 
-                    relative_pos = skew(l, m, n, self.skewer)
-
-                    for side in cube:
+                    for side in element:
                         (Ls, Ms, Ns) = (
-                            self.scale[0]*(cube[side][0] + l ) +relative_pos[0],
-                            self.scale[1]*(cube[side][1] + m ) +relative_pos[1],
-                            self.scale[2]*(cube[side][2] + n ) +relative_pos[2]
+                            self.scale[0]*(element[side][0] + l ) +relative_pos[0],
+                            self.scale[1]*(element[side][1] + m ) +relative_pos[1],
+                            self.scale[2]*(element[side][2] + n ) +relative_pos[2]
                         )
                         ax.plot_surface(
                             Ls, Ns, Ms,
@@ -133,12 +138,7 @@ class NDArrayPlotter(object):
                     
                     if text:
 
-                        if text == 'coords':
-                            elmt_label = "[%d,%d,%d]" %(l, m, n)
-                        elif text == 'values':
-                            elmt_label = str(ary[l,m, n])
-                        else:
-                            elmt_label = text
+                        elmt_label = text(array, l, m, n)
 
                         elmt_center_coord = np.asarray([l,m,n])
                         elmt_center_coord = elmt_center_coord*np.asarray(self.scale) \
@@ -155,7 +155,7 @@ class NDArrayPlotter(object):
                         )
 
         highest = 0                         # Make it look cubic
-        for size in ary.shape:
+        for size in array.shape:
             if size > highest:
                 highest = size
         ax.set_xlim((0,highest))
@@ -163,7 +163,7 @@ class NDArrayPlotter(object):
         ax.set_zlim((0,highest))
         
 
-        ax.set_title(r"ND array(\textbf{\emph{l}}, \textbf{\emph{m}}, \textbf{\emph{n}}) = %dD %s" % (ary.ndim, str(ary.shape)))
+        ax.set_title(r"ND array(\textbf{\emph{l}}, \textbf{\emph{m}}, \textbf{\emph{n}}) = %dD %s" % (array.ndim, str(array.shape)))
 
         plt.gca().invert_zaxis()
 
@@ -173,9 +173,9 @@ class NDArrayPlotter(object):
         # x = l
         # y = n
         # z = m
-        L, M, N = ary.shape
+        L, M, N = array.shape
         L_scl,  M_scl,  N_scl  = np.asarray(self.scale)
-        L_skew, M_skew, N_skew = skew(L_scl, M_scl, N_scl)
+        L_skew, M_skew, N_skew = apply_spacing(L_scl, M_scl, N_scl, self.spacing)
 
         axis_label_format = r"$\leftarrow$ \textbf{\emph{%s}} $\rightarrow$"
 
@@ -257,9 +257,8 @@ def main():
     colors[1,:,1] = "#FF0000"
     alphas[1,:,1] = 0.75
     """
-    #subject = np.ones((1,3,3))
     subject = np.arange(0,9).reshape((1,3,3))
-    plotter = NDArrayPlotter(subject.shape, skewer="even_wide")
+    plotter = NDArrayPlotter(subject, spacing=('even', 0.2,0.2,0.2))
     
     colors = plotter.set_color("#FFFF00")
     alphas = plotter.set_alpha(0.2)
@@ -268,8 +267,8 @@ def main():
     colors[:,0,:] = "#00FF00"
     colors[:,2,:] = "#0000FF"
 
-    (fig_coord, ax_coors) = plotter.render(subject, text='coords')
-    (fig_values, ax_value) = plotter.render(subject, text='values')
+    (fig_coord, ax_coors) = plotter.render(text=text_coords)
+    (fig_values, ax_value) = plotter.render(text=text_values)
     plt.show()
 
 if __name__ == "__main__":
