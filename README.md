@@ -13,3 +13,11 @@ Script for plotting / visualizing three dimensional arrays, see below for a coup
 
 ![Border visualization](gallery/border.png)
 
+# Coordinates
+
+![Coordinate visualization](gallery/coords.png)
+
+# Values
+
+![Value visualization](gallery/values.png)
+

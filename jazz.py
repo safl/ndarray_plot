@@ -23,21 +23,35 @@ def make_cube():
         "front"  : np.asarray( [[[0,1],[0,1]], [[0,0],[0,0]], [[0,0],[1,1]]] ),
         "back"   : np.asarray( [[[0,1],[0,1]], [[1,1],[1,1]], [[0,0],[1,1]]] )
     }
+
+    """
+    planes = {
+        "top"    : np.asarray( [[[1,2],[1,2]], [[1,1],[2,2]], [[2,2],[2,2]]] ),
+        "bottom" : np.asarray( [[[1,2],[1,2]], [[1,1],[2,2]], [[1,1],[1,1]]] ),
+        "left"   : np.asarray( [[[1,1],[1,1]], [[1,2],[1,2]], [[1,1],[2,2]]] ),
+        "right"  : np.asarray( [[[2,2],[2,2]], [[1,2],[1,2]], [[1,1],[2,2]]] ),
+        "front"  : np.asarray( [[[1,2],[1,2]], [[1,1],[1,1]], [[1,1],[2,2]]] ),
+        "back"   : np.asarray( [[[1,2],[1,2]], [[2,2],[2,2]], [[1,1],[2,2]]] )
+    }
+    """
+
     return planes
 
-def skew(space, column, row, recipe=None):
+def skew(l, m, n, recipe=None):
     """Position of array elements in relation to each other."""
 
     if recipe is None:
         return (0,0,0)
     elif recipe == "even":
-        return (space*0.1, row*0.1, column*0.1)
+        return (l*0.1, m*0.1, n*0.1)
+    elif recipe == "even_wide":
+        return (l*2.0, m*0.1, n*0.1)
     elif recipe == "layered_tight":
-        return (space*0.1, space*0.5, -(space*0.5))
+        return (l*0.1, -l*0.5, l*0.5)
     elif recipe == "layered_loose":
-        return (space*1.0, space*1.25, -(space*1.25))
+        return (l*1.0, -l*1.0, l*1.0)
     elif recipe == "layered":
-        return (space*0.75, space*0.75, -(space*0.75))
+        return (l*0.75, -l*0.75, l*0.75)
     else:
         raise TypeError("Unknown recipe[%s]" % recipe)
 
@@ -84,37 +98,60 @@ class NDArrayPlotter(object):
 
         return self.skewer
 
-    def render(self, ary, highlight=None):
+    def render(self, ary, text=None, highlight=None, azim=-15, elev=15):
         
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
 
         cube = make_cube()
 
-        for space in xrange(0, ary.shape[0]):
-            for column in xrange(0, ary.shape[1]):
-                for row in xrange(0, ary.shape[2]):
+        for l in xrange(0, ary.shape[0]):
+            for m in xrange(0, ary.shape[1]):
+                for n in xrange(0, ary.shape[2]):
 
                     # Extract settings that apply to all sides of the cube
-                    alpha = self.alphas[space,column,row]
-                    color = self.colors[space,column,row]
+                    alpha = self.alphas[l, m, n]
+                    color = self.colors[l, m, n]
 
-                    if highlight and highlight[space,column,row] == 1:
+                    if highlight and highlight[l, m, n] == 1:
                         alpha = 1
 
-                    relative_pos = skew(space, column, row, self.skewer)
+                    relative_pos = skew(l, m, n, self.skewer)
 
                     for side in cube:
-                        (Xs, Ys, Zs) = (
-                            self.scale[0]*(cube[side][0] + space  ) +relative_pos[0],
-                            self.scale[1]*(cube[side][1] + row    ) +relative_pos[1],
-                            self.scale[2]*(cube[side][2] + column ) +relative_pos[2]
+                        (Ls, Ms, Ns) = (
+                            self.scale[0]*(cube[side][0] + l ) +relative_pos[0],
+                            self.scale[1]*(cube[side][1] + m ) +relative_pos[1],
+                            self.scale[2]*(cube[side][2] + n ) +relative_pos[2]
                         )
                         ax.plot_surface(
-                            Xs, Ys, Zs,
+                            Ls, Ns, Ms,
                             rstride=1, cstride=1,
                             alpha=alpha,
                             color=color
+                        )
+                    
+                    if text:
+
+                        if text == 'coords':
+                            elmt_label = "[%d,%d,%d]" %(l, m, n)
+                        elif text == 'values':
+                            elmt_label = str(ary[l,m, n])
+                        else:
+                            elmt_label = text
+
+                        elmt_center_coord = np.asarray([l,m,n])
+                        elmt_center_coord = elmt_center_coord*np.asarray(self.scale) \
+                                         + np.asarray(relative_pos)
+                        elmt_center_coord = elmt_center_coord + np.asarray(self.scale)/2.0
+
+                        elmt_label_coord = elmt_center_coord
+
+                        ax.text(
+                            elmt_label_coord[0], elmt_label_coord[2], elmt_label_coord[1], 
+                            elmt_label,
+                            horizontalalignment='center', verticalalignment='center',
+                            zdir='y'
                         )
 
         highest = 0                         # Make it look cubic
@@ -124,28 +161,36 @@ class NDArrayPlotter(object):
         ax.set_xlim((0,highest))
         ax.set_ylim((0,highest))
         ax.set_zlim((0,highest))
+        
+        ax.set_title("ND array(l, m, n) = %dD %s" % (ary.ndim, str(ary.shape)))
 
+        ax.set_xlabel('l' )   # Meant to visualize ROW-MAJOR ordering 
+        ax.set_ylabel('n')
+        ax.set_zlabel('m')
 
-        ax.set_xlabel('Third dimension' )   # Meant to visualize ROW-MAJOR ordering 
-        ax.set_ylabel('Row(s)')
-        ax.set_zlabel('Column(s)')
-
-        #plt.axis('off')    # This also removes the axis labels... i want those...
-        ax.set_axis_off()  # this removes too much (also the labels)
-
-        # So I try this instead...
-        ax.set_xticks([])          # removes the ticks... great now the rest of it
+        # Get rid of the ticks
+        ax.set_xticks([])
         ax.set_yticks([])
         ax.set_zticks([])
-        #ax.grid(False)             # this does nothing....
-        #ax.set_frame_on(False)     # this does nothing....
-        plt.show()
+
+        # Get rid of the panes
+        ax.w_xaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
+        ax.w_yaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
+        ax.w_zaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
+
+        # Get rid of the spines
+        ax.w_xaxis.line.set_color((1.0, 1.0, 1.0, 0.0))
+        ax.w_yaxis.line.set_color((1.0, 1.0, 1.0, 0.0))
+        ax.w_zaxis.line.set_color((1.0, 1.0, 1.0, 0.0))
+
+        plt.gca().invert_zaxis()
+
+        ax.view_init(azim=azim, elev=elev)
+
+        return (fig, ax)
 
 def main():
     
-    subject = np.ones((3,3,3))
-
-    plotter = NDArrayPlotter(subject.shape)
 
     """
     colors = plotter.colors
@@ -176,8 +221,20 @@ def main():
     colors[1,:,1] = "#FF0000"
     alphas[1,:,1] = 0.75
     """
+    #subject = np.ones((1,3,3))
+    subject = np.arange(0,9).reshape((1,3,3))
+    plotter = NDArrayPlotter(subject.shape, skewer="even_wide")
+    colors = plotter.set_color("#FFFF00")
+    alphas = plotter.set_alpha(0.2)
 
-    plotter.render(subject)
+    colors[:,1,:] = "#FF0000"
+    colors[:,0,:] = "#00FF00"
+    colors[:,2,:] = "#0000FF"
+    print subject
+    #(fig, ax) = plotter.render(subject, text='coords')
+    (fig_coord, ax_coors) = plotter.render(subject, text='coords')
+    (fig_values, ax_value) = plotter.render(subject, text='values')
+    plt.show()
 
 if __name__ == "__main__":
     main()
